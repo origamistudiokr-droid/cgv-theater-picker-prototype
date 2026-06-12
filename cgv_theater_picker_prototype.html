@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>극장 선택 개선안 프로토타입 — MP2 데모</title>
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; font-family:-apple-system,BlinkMacSystemFont,'Apple SD Gothic Neo','Noto Sans KR',sans-serif; }
+  body { background:#e9e9ee; display:flex; flex-direction:column; align-items:center; padding:24px 12px; gap:16px; }
+  h1 { font-size:18px; color:#333; }
+  .desc { font-size:13px; color:#666; text-align:center; max-width:420px; line-height:1.5; }
+  .ab-switch { display:flex; background:#d4d4dc; border-radius:999px; padding:4px; gap:4px; }
+  .ab-switch button { border:none; padding:8px 20px; border-radius:999px; font-size:14px; font-weight:700; cursor:pointer; background:transparent; color:#555; }
+  .ab-switch button.on { background:#fb4357; color:#fff; }
+  .phone { width:390px; height:720px; background:#fff; border-radius:32px; box-shadow:0 12px 40px rgba(0,0,0,.25); overflow:hidden; display:flex; flex-direction:column; border:8px solid #1a1a1a; }
+  .appbar { padding:14px 16px; font-weight:800; font-size:16px; display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid #eee; }
+  .appbar .tag { font-size:11px; font-weight:700; padding:3px 8px; border-radius:6px; }
+  .tag.ctrl { background:#eee; color:#666; }
+  .tag.test { background:#ffe3e7; color:#fb4357; }
+  .content { flex:1; overflow-y:auto; }
+
+  /* ---------- 현행 (대조군) ---------- */
+  .search { margin:12px 16px; border:1px solid #ddd; border-radius:10px; padding:10px 12px; color:#aaa; font-size:14px; }
+  .region-wrap { display:flex; }
+  .region-left { width:130px; }
+  .region-left div { padding:14px 16px; font-size:14px; font-weight:700; color:#333; }
+  .region-left div.sel { background:#1a1a1a; color:#fff; border-radius:0 999px 999px 0; }
+  .region-right { flex:1; border-left:1px solid #eee; }
+  .region-right div { padding:14px 16px; font-size:14px; border-bottom:1px solid #f3f3f3; cursor:pointer; }
+  .region-right div:hover { background:#fafafa; }
+
+  /* ---------- 개선안 (실험군) ---------- */
+  .loc-bar { margin:12px 16px 4px; display:flex; align-items:center; gap:8px; font-size:13px; }
+  .loc-chip { background:#1a1a1a; color:#fff; border-radius:999px; padding:6px 12px; font-weight:700; font-size:12px; }
+  .loc-bar .edit { color:#888; font-size:12px; text-decoration:underline; cursor:pointer; }
+  .viewtoggle { display:flex; margin:8px 16px; background:#f1f1f4; border-radius:10px; padding:3px; }
+  .viewtoggle button { flex:1; border:none; background:transparent; padding:8px; border-radius:8px; font-size:13px; font-weight:700; color:#777; cursor:pointer; }
+  .viewtoggle button.on { background:#fff; color:#1a1a1a; box-shadow:0 1px 4px rgba(0,0,0,.12); }
+  .theater { display:flex; justify-content:space-between; align-items:center; padding:14px 16px; border-bottom:1px solid #f3f3f3; cursor:pointer; }
+  .theater:hover { background:#fff5f6; }
+  .theater.sel { background:#fff0f2; outline:2px solid #fb4357; outline-offset:-2px; border-radius:12px; }
+  .t-name { font-weight:800; font-size:15px; }
+  .t-meta { font-size:12px; color:#888; margin-top:3px; }
+  .t-dist { text-align:right; }
+  .t-dist b { font-size:15px; color:#fb4357; }
+  .t-dist span { display:block; font-size:11px; color:#999; margin-top:2px; }
+  .badge { display:inline-block; font-size:10px; font-weight:700; padding:2px 6px; border-radius:5px; margin-left:6px; vertical-align:1px; }
+  .badge.recent { background:#fff0c9; color:#a07400; }
+  .badge.special { background:#e8f1ff; color:#2c6fd1; }
+  #mapview { display:none; position:relative; margin:8px 16px; height:380px; background:#dfeee2; border-radius:16px; overflow:hidden; }
+  #mapview svg { width:100%; height:100%; }
+  .pin { cursor:pointer; }
+  .pin text { font-size:10px; font-weight:700; fill:#333; }
+  .pin circle { fill:#fb4357; stroke:#fff; stroke-width:2; }
+  .pin.me circle { fill:#2c6fd1; }
+  .pin.sel circle { fill:#1a1a1a; r:9; }
+  .map-note { position:absolute; bottom:8px; right:12px; font-size:10px; color:#7a8d7d; }
+  .bottom { padding:12px 16px; border-top:1px solid #eee; }
+  .bottom button { width:100%; border:none; background:#fb4357; color:#fff; font-size:15px; font-weight:800; padding:14px; border-radius:12px; cursor:pointer; }
+  .bottom button:disabled { background:#f0b3ba; }
+  .timer { font-size:12px; color:#999; text-align:center; padding:6px 0 0; }
+  .footnote { font-size:12px; color:#888; max-width:420px; line-height:1.6; }
+</style>
+</head>
+<body>
+
+<h1>CGV 극장 선택 — 현행 vs 개선안 프로토타입</h1>
+<p class="desc">MP2 Day 1 데모 · 가설: "극장을 지명이 아니라 <b>내 위치 기준 거리·시간</b>으로 보여주면 선택이 빨라진다" · 더미데이터(내 위치 = 역삼역 가정)</p>
+
+<div class="ab-switch">
+  <button id="btnA" class="on" onclick="setMode('A')">A · 현행 (대조군)</button>
+  <button id="btnB" onclick="setMode('B')">B · 개선안 (실험군)</button>
+</div>
+
+<div class="phone">
+  <div class="appbar">
+    <span>극장 선택</span>
+    <span id="modeTag" class="tag ctrl">현행: 지역 리스트</span>
+  </div>
+
+  <div class="content" id="viewA">
+    <div class="search">지역을 입력해주세요</div>
+    <div class="region-wrap">
+      <div class="region-left">
+        <div class="sel">서울(28)</div><div>경기(52)</div><div>인천(11)</div><div>강원(5)</div><div>대전/충청(20)</div><div>대구(8)</div><div>부산/울산(17)</div>
+      </div>
+      <div class="region-right" id="regionList"></div>
+    </div>
+  </div>
+
+  <div class="content" id="viewB" style="display:none">
+    <div class="loc-bar"><span class="loc-chip">📍 내 위치: 역삼역</span><span class="edit">위치 변경</span></div>
+    <div class="viewtoggle">
+      <button id="vtList" class="on" onclick="setView('list')">리스트</button>
+      <button id="vtMap" onclick="setView('map')">지도</button>
+    </div>
+    <div id="listview"></div>
+    <div id="mapview">
+      <svg viewBox="0 0 360 380" id="mapsvg"></svg>
+      <span class="map-note">※ 더미 지도 (실서비스는 지도 SDK)</span>
+    </div>
+  </div>
+
+  <div class="bottom">
+    <button id="cta" disabled>극장을 선택해 주세요</button>
+    <div class="timer" id="timer">⏱ 선택 소요시간 측정 중…</div>
+  </div>
+</div>
+
+<p class="footnote">
+  <b>수업 포인트</b> — ① A/B 두 화면에서 같은 과제("역삼역에서 가장 빨리 갈 수 있는 극장 선택")를 주고 소요시간을 비교해보세요(프록시 실험).
+  ② 개선안은 '지도 우선'이 아니라 '<b>위치 우선</b>'입니다: 기본은 거리순 리스트 + 최근 방문 고정, 지도는 보조.
+  ③ 위치 권한 거부 시 현행 리스트로 폴백합니다(Edge Case).
+</p>
+
+<script>
+const theaters = [
+  { name:'CGV 강남',        area:'강남구 역삼동',  km:0.4,  min:'도보 5분',    recent:true,  special:'',        x:200, y:235 },
+  { name:'CGV 압구정',      area:'강남구 신사동',  km:2.1,  min:'지하철 9분',  recent:false, special:'아트하우스', x:185, y:170 },
+  { name:'CGV 청담씨네시티', area:'강남구 청담동',  km:2.8,  min:'지하철 12분', recent:false, special:'',        x:235, y:165 },
+  { name:'CGV 왕십리',      area:'성동구 행당동',  km:5.6,  min:'지하철 18분', recent:false, special:'IMAX',    x:215, y:90  },
+  { name:'CGV 건대입구',    area:'광진구 자양동',  km:6.2,  min:'지하철 20분', recent:false, special:'',        x:280, y:95  },
+  { name:'CGV 용산아이파크몰', area:'용산구 한강로', km:7.4, min:'지하철 24분', recent:false, special:'IMAX·4DX', x:110, y:130 },
+  { name:'CGV 동대문',      area:'중구 을지로',    km:7.9,  min:'지하철 26분', recent:false, special:'',        x:185, y:55  },
+  { name:'CGV 명동',        area:'중구 명동',      km:8.3,  min:'지하철 27분', recent:false, special:'',        x:155, y:75  },
+  { name:'CGV 강변',        area:'광진구 구의동',  km:8.8,  min:'지하철 29분', recent:false, special:'',        x:310, y:120 },
+  { name:'CGV 구로',        area:'구로구 구로동',  km:12.6, min:'지하철 36분', recent:false, special:'',        x:40,  y:200 },
+];
+const regions = ['전체 (28)','강남','강변','건대입구','고덕강일','구로','대학로','동대문','등촌','명동','목동','미아','불광','상봉'];
+
+let mode='A', view='list', selected=null, t0=Date.now(), timerInt;
+
+function fmtSec(){ return ((Date.now()-t0)/1000).toFixed(1)+'초'; }
+function startTimer(){ t0=Date.now(); clearInterval(timerInt); document.getElementById('timer').textContent='⏱ 선택 소요시간 측정 중…';
+  timerInt=setInterval(()=>{ if(!selected) document.getElementById('timer').textContent='⏱ '+fmtSec()+' 경과'; },200); }
+
+function setMode(m){ mode=m; selected=null;
+  document.getElementById('btnA').classList.toggle('on',m==='A');
+  document.getElementById('btnB').classList.toggle('on',m==='B');
+  document.getElementById('viewA').style.display = m==='A' ? '' : 'none';
+  document.getElementById('viewB').style.display = m==='B' ? '' : 'none';
+  const tag=document.getElementById('modeTag');
+  tag.textContent = m==='A' ? '현행: 지역 리스트' : '개선안: 내 주변';
+  tag.className = 'tag ' + (m==='A'?'ctrl':'test');
+  updateCTA(); startTimer(); render(); }
+
+function setView(v){ view=v;
+  document.getElementById('vtList').classList.toggle('on',v==='list');
+  document.getElementById('vtMap').classList.toggle('on',v==='map');
+  document.getElementById('listview').style.display = v==='list'?'':'none';
+  document.getElementById('mapview').style.display = v==='map'?'block':'none'; }
+
+function pick(name){ selected=name; clearInterval(timerInt);
+  document.getElementById('timer').textContent='✅ 선택 완료 — 소요시간 '+fmtSec();
+  updateCTA(); render(); }
+
+function updateCTA(){ const b=document.getElementById('cta');
+  if(selected){ b.disabled=false; b.textContent=selected+' — 시간표 보기'; }
+  else { b.disabled=true; b.textContent='극장을 선택해 주세요'; } }
+
+function render(){
+  /* A: region list */
+  document.getElementById('regionList').innerHTML =
+    regions.map(r=>`<div onclick="pick('CGV ${r.replace(/ \(.*\)/,'')}')">${r}</div>`).join('');
+  /* B: sorted list — 최근 방문 고정 후 거리순 */
+  const sorted=[...theaters].sort((a,b)=>(b.recent-a.recent)||(a.km-b.km));
+  document.getElementById('listview').innerHTML = sorted.map(t=>`
+    <div class="theater ${selected===t.name?'sel':''}" onclick="pick('${t.name}')">
+      <div><div class="t-name">${t.name}
+        ${t.recent?'<span class="badge recent">최근 방문</span>':''}
+        ${t.special?`<span class="badge special">${t.special}</span>`:''}</div>
+        <div class="t-meta">${t.area}</div></div>
+      <div class="t-dist"><b>${t.km}km</b><span>${t.min}</span></div>
+    </div>`).join('');
+  /* B: map */
+  document.getElementById('mapsvg').innerHTML = `
+    <path d="M0,150 C80,120 160,160 240,130 C300,110 340,130 360,118 L360,148 C320,160 290,140 245,160 C165,190 80,150 0,180 Z" fill="#bcd9ef"/>
+    <text x="12" y="145" font-size="10" fill="#6f93b2">한강</text>
+    <g class="pin me"><circle cx="200" cy="250" r="7"/><text x="210" y="254">내 위치 (역삼역)</text></g>
+    ${theaters.map(t=>`
+      <g class="pin ${selected===t.name?'sel':''}" onclick="pick('${t.name}')">
+        <line x1="200" y1="250" x2="${t.x}" y2="${t.y}" stroke="#fb4357" stroke-width="${t.km<3?1.5:0}" stroke-dasharray="3 3" opacity=".5"/>
+        <circle cx="${t.x}" cy="${t.y}" r="7"/>
+        <text x="${t.x+10}" y="${t.y+4}">${t.name.replace('CGV ','')} · ${t.km}km</text>
+      </g>`).join('')}`;
+}
+document.getElementById('cta').onclick=()=>alert(selected+' 시간표로 이동 (프로토타입 범위 끝)\n\n실서비스라면: 다음 단계에서도 가격·잔여석이 함께 보여야 합니다.');
+setMode('A');
+</script>
+</body>
+</html>
